@@ -55,6 +55,10 @@ fn render_to_window() -> Result<(), Error> {
                 return;
             }
 
+            if input.key_pressed(VirtualKeyCode::R) {
+                fractal.update_colors();
+            }
+
             if let Some(size) = input.window_resized() {
                 // pixels.resize_buffer(size.width, size.height);
                 pixels.resize_surface(size.width, size.height);
@@ -62,12 +66,15 @@ fn render_to_window() -> Result<(), Error> {
 
             let scroll_delta = input.scroll_diff();
             if scroll_delta != 0.0 {
+                if let Some(pos) = input.mouse() {
+                    fractal.update_mouse(pos);
+                }
                 fractal.update_scroll(scroll_delta);
             }
 
-            if input.mouse_released(0) {
-                if let Some(pos) = input.mouse() {
-                    fractal.update_mouse(pos);
+            if input.mouse_held(0) {
+                if input.mouse_diff() != (0.0, 0.0) {
+                    fractal.update_mouse_drag(input.mouse_diff());
                 }
             }
 
@@ -88,6 +95,8 @@ struct Fractal {
     colors: Vec<[u8; 4]>,
 }
 
+const COLORS: usize = 8;
+
 impl Fractal {
     fn new(width: usize, height: usize) -> Self {
         Self {
@@ -96,7 +105,7 @@ impl Fractal {
             centre: Complex { re: -0.75, im: 0.0 },
             scaling_factor: 10.0,
             changed: true,
-            colors: get_colors(256),
+            colors: get_colors(COLORS),
         }
     }
 
@@ -107,7 +116,7 @@ impl Fractal {
             let point = self.pixel_to_point((x, y));
 
             let rgba = match escape_time(point, 256) {
-                Some(t) => self.colors[t],
+                Some(t) => self.colors[t % COLORS],
                 None => [0x00, 0x00, 0x00, 0xff],
             };
 
@@ -132,6 +141,19 @@ impl Fractal {
     fn update_mouse(&mut self, pos: (f32, f32)) {
         self.changed = true;
         self.centre = self.pixel_to_point(pos);
+    }
+
+    fn update_mouse_drag(&mut self, diff: (f32, f32)) {
+        self.changed = true;
+        self.centre = self.pixel_to_point((
+            (self.bounds.0 as f32 / 2.0) - diff.0,
+            (self.bounds.1 as f32 / 2.0) - diff.1,
+        ));
+    }
+
+    fn update_colors(&mut self) {
+        self.changed = true;
+        self.colors = get_colors(COLORS);
     }
 }
 
