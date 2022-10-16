@@ -22,6 +22,7 @@ async fn run() {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
 
+        // TODO: switch to winit_input_helper
         match event {
             Event::RedrawRequested(window_id) if window_id == window.id() => {
                 match state.render() {
@@ -46,9 +47,26 @@ async fn run() {
                 WindowEvent::Resized(new_size) => {
                     state.resize(new_size);
                 }
-                _ => (),
+                _ => {}
             },
-            _ => (),
+
+            Event::DeviceEvent { event, .. } => match event {
+                winit::event::DeviceEvent::MouseWheel {
+                    delta: winit::event::MouseScrollDelta::LineDelta(_, delta),
+                } => {
+                    // TODO: consider using winit_input_helper
+                    // FIXME: should both zoom AND change centre based on mouse position
+                    // FIXME: should handle PixelDelta as well
+                    // I should really switch to winit_input_helper
+                    println!("{}", delta);
+                }
+                winit::event::DeviceEvent::MouseMotion { delta } => {
+                    println!("{:?}", delta);
+                }
+                _ => {}
+            },
+
+            _ => {}
         }
     })
 }
@@ -94,6 +112,33 @@ const VERTICES: &[Vertex] = &[
     },
 ];
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+/// Stores information about viewport and the complex plane position
+struct ViewportUniform {
+    // FIXME: assuming square viewport; change to colculate properly for different aspect ratios
+    /// Physical viewport size
+    window_size: f32,
+    /// Viewport size in the complex plane
+    abstract_size: f32,
+    /// Complex plane North and West offset from 0, 0 origin
+    offset: f32,
+}
+
+impl ViewportUniform {
+    fn new(window: winit::dpi::PhysicalSize<u32>) -> Self {
+        Self {
+            window_size: window.width as f32,
+            abstract_size: 4.0,
+            offset: 2.0,
+        }
+    }
+
+    fn update_window_size(&mut self, window: winit::dpi::PhysicalSize<u32>) {
+        self.window_size = window.width as f32;
+    }
+}
+
 struct State {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface,
@@ -103,6 +148,9 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     num_vertices: u32,
+    viewport_uniform: ViewportUniform,
+    viewport_buffer: wgpu::Buffer,
+    viewport_bind_group: wgpu::BindGroup,
 }
 
 impl State {
@@ -137,10 +185,39 @@ impl State {
         };
         surface.configure(&device, &config);
 
+        let mut viewport_uniform = ViewportUniform::new(size);
+        let viewport_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Viewport Buffer"),
+            contents: bytemuck::cast_slice(&[viewport_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let viewport_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: None,
+            });
+        let viewport_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &viewport_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: viewport_buffer.as_entire_binding(),
+            }],
+            label: None,
+        });
+
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[],
+                bind_group_layouts: &[&viewport_bind_group_layout],
                 push_constant_ranges: &[],
                 label: None,
             });
@@ -196,6 +273,9 @@ impl State {
             render_pipeline,
             vertex_buffer,
             num_vertices,
+            viewport_uniform,
+            viewport_buffer,
+            viewport_bind_group,
         }
     }
 
@@ -205,6 +285,13 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+
+            self.viewport_uniform.update_window_size(new_size);
+            self.queue.write_buffer(
+                &self.viewport_buffer,
+                0,
+                bytemuck::cast_slice(&[self.viewport_uniform]),
+            );
         }
     }
 
@@ -239,6 +326,7 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.viewport_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.draw(0..self.num_vertices, 0..1);
         }

@@ -39,11 +39,18 @@ fn escape_time(cr: f32, ci: f32, limit: f32) -> f32 {
     return 1.0;
 }
 
+struct ViewportUniform {
+    window_size: f32,
+    abstract_size: f32,
+    offset: f32,
+};
+@group(0) @binding(0)
+var<uniform> viewport: ViewportUniform;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let width = 4.0;
-    let x = in.clip_position[0] * width / 1600.0 - 2.0;
-    let y = in.clip_position[1] * width / 1600.0 - 2.0;
+    let x = in.clip_position[0] * viewport.abstract_size / viewport.window_size - viewport.offset;
+    let y = in.clip_position[1] * viewport.abstract_size / viewport.window_size - viewport.offset;
     let e = escape_time(x, y, 255.0) / 255.0;
     return vec4<f32>(e, e, e, 1.0);
 }
