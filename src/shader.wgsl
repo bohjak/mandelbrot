@@ -17,22 +17,6 @@ fn vs_main(model: VertexInput) -> VertexOutput {
 
 // Fragment shader
 
-
-///// Returns the amount of iteration it takes z to escape the 2.0 circle given a c.
-///// If limit is reached, z is assumed to not escape.
-// fn escape_time(c: Complex<f64>, limit: usize) -> Option<usize> {
-//     let mut z = Complex { re: 0.0, im: 0.0 };
-//     for i in 0..limit {
-//         if z.norm_sqr() > 4.0 {
-//             return Some(i);
-//         } else {
-//             z = z * z + c;
-//         }
-//     }
-// 
-//     None
-// }
-
 fn norm_sqr(r: f32, i: f32) -> f32 {
     return r * r + i * i;
 }
@@ -40,15 +24,15 @@ fn norm_sqr(r: f32, i: f32) -> f32 {
 fn escape_time(cr: f32, ci: f32, limit: f32) -> f32 {
     var zr = 0.0;
     var zi = 0.0;
+    var tr: f32;
 
     for (var i = 0.0; i < limit; i += 1.0) {
         if (norm_sqr(zr, zi) > 4.0) {
             return i;
         } else {
-            zr = zr * zr - zi * zi;
-            zr += cr;
-            zi = 2.0 * zr * zi;
-            zi += ci;
+            tr = zr;
+            zr = zr * zr - zi * zi + cr;
+            zi = 2.0 * tr * zi + ci;
         }
     }
 
