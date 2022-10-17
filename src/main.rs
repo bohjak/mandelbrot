@@ -25,6 +25,7 @@ async fn run() {
         *control_flow = ControlFlow::Wait;
 
         if let Event::RedrawRequested(_) = event {
+            state.update_viewport();
             match state.render() {
                 Ok(_) => (),
                 // Recorfigure the surface if lost
@@ -48,14 +49,14 @@ async fn run() {
 
             if input.scroll_diff() != 0.0 {
                 if let Some(pos) = input.mouse() {
-                    // TODO: update centre position
+                    state.viewport.set_centre(pos);
                 }
-                state.update_scale(input.scroll_diff());
+                state.viewport.update_zoom(input.scroll_diff());
             }
 
             if input.mouse_held(0) {
                 if input.mouse_diff() != (0.0, 0.0) {
-                    state.update_position(input.mouse_diff());
+                    state.viewport.move_centre(input.mouse_diff());
                 }
             }
 
@@ -124,19 +125,20 @@ impl Viewport {
         }
     }
 
-    fn pixel_to_point(&self, pixel: f32) -> f32 {
-        let scale = 1.0 / 2f32.powf(self.zoom);
-        let ratio = self.point_width / self.pixel_width;
-        return pixel * scale * ratio;
-    }
-
     fn update_window_size(&mut self, window: winit::dpi::PhysicalSize<u32>) {
         self.pixel_width = window.width as f32;
     }
 
     fn move_centre(&mut self, delta: (f32, f32)) {
-        self.centre[0] -= self.pixel_to_point(delta.0);
-        self.centre[1] -= self.pixel_to_point(delta.1);
+        let scale = self.scale();
+        self.centre[0] -= delta.0 * scale;
+        self.centre[1] -= delta.1 * scale;
+    }
+
+    fn set_centre(&mut self, pos: (f32, f32)) {
+        let scale = self.scale();
+        self.centre[0] += (pos.0 - self.pixel_width / 2.0) * scale;
+        self.centre[1] += (pos.1 - self.pixel_height / 2.0) * scale;
     }
 
     fn update_zoom(&mut self, delta: f32) {
@@ -332,20 +334,8 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
-
             self.viewport.update_window_size(new_size);
-            self.update_viewport();
         }
-    }
-
-    fn update_position(&mut self, delta: (f32, f32)) {
-        self.viewport.move_centre(delta);
-        self.update_viewport();
-    }
-
-    fn update_scale(&mut self, delta: f32) {
-        self.viewport.update_zoom(delta);
-        self.update_viewport();
     }
 
     fn update_viewport(&mut self) {
