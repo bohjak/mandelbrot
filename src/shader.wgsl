@@ -46,6 +46,9 @@ struct ViewportUniform {
     cy: f32,
     xoff: f32,
     yoff: f32,
+    _padding_a: f32,
+    _padding_b: f32,
+    _padding_c: f32,
 };
 @group(0) @binding(0)
 var<uniform> viewport: ViewportUniform;

@@ -4,17 +4,41 @@ Interactive (as in one can zoom and move around) Mandelbrot set viewer. GPU-rend
 
 ## How To Run
 
-**Prerequisites:** [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) (rustc version >= 1.56.0)
+**Prerequisites:** [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) (rustc version >= 1.56.0), for WASM build [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/), and for dev server [go](https://go.dev/dl/)
 
-1. Clone the repository
+It's possible to either run natively or in the browser.
+
+First step is to clone the repository.
+
+```bash
+git clone https://github.com/bohjak/mandelbrot
+cd mandelbrot
+```
+
+For native build simply run release cargo build.
+
+```bash
+cargo run --release
+```
+
+For running in the browser:
+
+1. build with wasm-pack;
    ```bash
-   git clone https://github.com/bohjak/mandelbrot
-   cd mandelbrot
+   wasm-pack build --target web
    ```
-1. Run release build
+1. run server;
    ```bash
-   cargo run --release
+   go run server.go
    ```
+1. open in browser.
+   ```bash
+   open http://localhost:3000
+   ```
+
+> **Note**
+> The server uses server-sent events to reload the page when receiving a request to /sse/reload. It's possible to automatically build the project and reload the page for development convenience.
+> E.g. with [entr](https://eradman.com/entrproject/): `ls src/*.rs | entr -cs 'wasm-pack build --target=web && curl http://localhost:3000/sse/reload'`
 
 ## Controls
 

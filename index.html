@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <title>Mandelbrot</title>
+  </head>
+  <style>
+    canvas {
+      background: red;
+    }
+  </style>
+  <body>
+    <div id="fractal"></div>
+
+    <script type="text/javascript">
+      const sse = new EventSource("sse");
+
+      sse.addEventListener("message", () => {
+        window.location.reload();
+      });
+    </script>
+    <script type="module">
+      import init from "./pkg/mandelbrot.js";
+      init().then(() => {
+        console.log("WASM Loaded");
+      });
+    </script>
+  </body>
+</html>

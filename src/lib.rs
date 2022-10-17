@@ -1,4 +1,5 @@
 use bytemuck::{Pod, Zeroable};
+use cfg_if::cfg_if;
 use wgpu::util::DeviceExt;
 use winit::{dpi::PhysicalSize, window::Window};
 use winit::{
@@ -8,14 +9,43 @@ use winit::{
 };
 use winit_input_helper::WinitInputHelper;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn run() {
+    cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            #[cfg(feature = "console_error_panic_hook")]
+            console_error_panic_hook::set_once();
+        } else {
+            env_logger::init();
+        }
+    }
+
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = WindowBuilder::new()
         .with_title("Mandelbrot")
-        .with_inner_size(winit::dpi::PhysicalSize::new(1600.0, 1600.0))
+        .with_inner_size(PhysicalSize::new(1600, 1600))
         .build(&event_loop)
         .unwrap();
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        window.set_inner_size(PhysicalSize::new(800, 800));
+
+        use winit::platform::web::WindowExtWebSys;
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| {
+                let dst = doc.get_element_by_id("fractal")?;
+                let canvas = web_sys::Element::from(window.canvas());
+                dst.append_child(&canvas).ok()?;
+                Some(())
+            })
+            .expect("Couldn't append canvas to document body.");
+    }
 
     let mut state = State::new(&window).await;
 
@@ -155,6 +185,7 @@ impl Viewport {
 }
 
 /// Stores information about viewport and the complex plane position
+/// ¡IMPORTANT! Uniform buffers need to be 16 byte aligned for WASM
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 struct ViewportUniform {
@@ -168,6 +199,9 @@ struct ViewportUniform {
     xoff: f32,
     /// Middle of the y axis in pixels
     yoff: f32,
+    _padding_a: f32,
+    _padding_b: f32,
+    _padding_c: f32,
 }
 
 impl ViewportUniform {
@@ -178,6 +212,9 @@ impl ViewportUniform {
             cy: viewport.centre[1],
             xoff: viewport.pixel_width / 2.0,
             yoff: viewport.pixel_height / 2.0,
+            _padding_a: 0.0,
+            _padding_b: 0.0,
+            _padding_c: 0.0,
         }
     }
 
@@ -224,7 +261,19 @@ impl State {
             .await
             .unwrap();
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor::default(), None)
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    features: wgpu::Features::empty(),
+                    // WebGL doesn't support all wgpu features
+                    limits: if cfg!(target_arch = "wasm32") {
+                        wgpu::Limits::downlevel_webgl2_defaults()
+                    } else {
+                        wgpu::Limits::default()
+                    },
+                    label: None,
+                },
+                None,
+            )
             .await
             .unwrap();
 
