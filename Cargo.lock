@@ -719,7 +719,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mandel-wgpu"
+name = "mandelbrot"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
