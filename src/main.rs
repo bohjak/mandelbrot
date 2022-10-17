@@ -116,7 +116,7 @@ struct Viewport {
 impl Viewport {
     fn new(window: winit::dpi::PhysicalSize<u32>) -> Self {
         Self {
-            zoom: 1.0,
+            zoom: 0.0,
             pixel_width: window.width as f32,
             pixel_height: window.height as f32,
             point_width: 4.0,
@@ -125,7 +125,7 @@ impl Viewport {
     }
 
     fn pixel_to_point(&self, pixel: f32) -> f32 {
-        let scale = 1.0 / self.zoom;
+        let scale = 1.0 / 2f32.powf(self.zoom);
         let ratio = self.point_width / self.pixel_width;
         return pixel * scale * ratio;
     }
@@ -141,11 +141,11 @@ impl Viewport {
 
     fn update_zoom(&mut self, delta: f32) {
         let new_zoom = self.zoom + delta;
-        self.zoom = if new_zoom < 1.0 { 1.0 } else { new_zoom };
+        self.zoom = if new_zoom < 0.0 { 0.0 } else { new_zoom };
     }
 
     fn scale(&self) -> f32 {
-        return (1.0 / self.zoom) * (self.point_width / self.pixel_width);
+        return (1.0 / 2f32.powf(self.zoom)) * (self.point_width / self.pixel_width);
     }
 }
 
