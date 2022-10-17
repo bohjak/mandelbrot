@@ -1,9 +1,10 @@
 use wgpu::util::DeviceExt;
 use winit::{
-    event::{Event, WindowEvent},
+    event::{Event, VirtualKeyCode},
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+use winit_input_helper::WinitInputHelper;
 
 fn main() {
     pollster::block_on(run());
@@ -11,6 +12,7 @@ fn main() {
 
 async fn run() {
     let event_loop = EventLoop::new();
+    let mut input = WinitInputHelper::new();
     let window = WindowBuilder::new()
         .with_title("Mandelbrot")
         .with_inner_size(winit::dpi::PhysicalSize::new(1600.0, 1600.0))
@@ -22,51 +24,42 @@ async fn run() {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Wait;
 
-        // TODO: switch to winit_input_helper
-        match event {
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                match state.render() {
-                    Ok(_) => (),
-                    // Recorfigure the surface if lost
-                    Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                    // Quit if system is out of memory
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    // Outdated and Timeout should resolve themselves by the next frame
-                    Err(e) => eprintln!("{:?}", e),
+        if let Event::RedrawRequested(_) = event {
+            match state.render() {
+                Ok(_) => (),
+                // Recorfigure the surface if lost
+                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
+                // Quit if system is out of memory
+                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                // Outdated and Timeout should resolve themselves by the next frame
+                Err(e) => eprintln!("{:?}", e),
+            }
+        }
+
+        if input.update(&event) {
+            if input.quit() || input.key_pressed(VirtualKeyCode::Escape) {
+                *control_flow = ControlFlow::Exit;
+                return;
+            }
+
+            if let Some(size) = input.window_resized() {
+                state.resize(size);
+            }
+
+            if input.scroll_diff() != 0.0 {
+                if let Some(pos) = input.mouse() {
+                    // TODO: update centre position
+                }
+                state.update_scale(input.scroll_diff());
+            }
+
+            if input.mouse_held(0) {
+                if input.mouse_diff() != (0.0, 0.0) {
+                    state.update_position(input.mouse_diff());
                 }
             }
 
-            Event::MainEventsCleared => {
-                window.request_redraw();
-            }
-
-            Event::WindowEvent { window_id, event } if window_id == window.id() => match event {
-                WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit;
-                }
-                WindowEvent::Resized(new_size) => {
-                    state.resize(new_size);
-                }
-                _ => {}
-            },
-
-            Event::DeviceEvent { event, .. } => match event {
-                winit::event::DeviceEvent::MouseWheel {
-                    delta: winit::event::MouseScrollDelta::LineDelta(_, delta),
-                } => {
-                    // TODO: consider using winit_input_helper
-                    // FIXME: should both zoom AND change centre based on mouse position
-                    // FIXME: should handle PixelDelta as well
-                    // I should really switch to winit_input_helper
-                    println!("{}", delta);
-                }
-                winit::event::DeviceEvent::MouseMotion { delta } => {
-                    println!("{:?}", delta);
-                }
-                _ => {}
-            },
-
-            _ => {}
+            window.request_redraw();
         }
     })
 }
@@ -89,7 +82,7 @@ impl Vertex {
     }
 }
 
-const VERTICES: &[Vertex] = &[
+const SQUARE: &[Vertex] = &[
     // NW, SW, SE
     Vertex {
         position: [-1.0, 1.0],
@@ -112,30 +105,81 @@ const VERTICES: &[Vertex] = &[
     },
 ];
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-/// Stores information about viewport and the complex plane position
-struct ViewportUniform {
-    // FIXME: assuming square viewport; change to colculate properly for different aspect ratios
-    /// Physical viewport size
-    window_size: f32,
-    /// Viewport size in the complex plane
-    abstract_size: f32,
-    /// Complex plane North and West offset from 0, 0 origin
-    offset: f32,
+struct Viewport {
+    zoom: f32,
+    pixel_width: f32,
+    pixel_height: f32,
+    point_width: f32,
+    centre: [f32; 2],
 }
 
-impl ViewportUniform {
+impl Viewport {
     fn new(window: winit::dpi::PhysicalSize<u32>) -> Self {
         Self {
-            window_size: window.width as f32,
-            abstract_size: 4.0,
-            offset: 2.0,
+            zoom: 1.0,
+            pixel_width: window.width as f32,
+            pixel_height: window.height as f32,
+            point_width: 4.0,
+            centre: [0.0, 0.0],
         }
     }
 
+    fn pixel_to_point(&self, pixel: f32) -> f32 {
+        let scale = 1.0 / self.zoom;
+        let ratio = self.point_width / self.pixel_width;
+        return pixel * scale * ratio;
+    }
+
     fn update_window_size(&mut self, window: winit::dpi::PhysicalSize<u32>) {
-        self.window_size = window.width as f32;
+        self.pixel_width = window.width as f32;
+    }
+
+    fn move_centre(&mut self, delta: (f32, f32)) {
+        self.centre[0] -= self.pixel_to_point(delta.0);
+        self.centre[1] -= self.pixel_to_point(delta.1);
+    }
+
+    fn update_zoom(&mut self, delta: f32) {
+        let new_zoom = self.zoom + delta;
+        self.zoom = if new_zoom < 1.0 { 1.0 } else { new_zoom };
+    }
+
+    fn scale(&self) -> f32 {
+        return (1.0 / self.zoom) * (self.point_width / self.pixel_width);
+    }
+}
+
+/// Stores information about viewport and the complex plane position
+#[repr(C)]
+#[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct ViewportUniform {
+    /// Ratio of points per pixel
+    scale: f32,
+    /// Offset from 0, 0 complex plane origin
+    cx: f32,
+    cy: f32,
+    /// Physical window size in pixels
+    xoff: f32,
+    yoff: f32,
+}
+
+impl ViewportUniform {
+    fn new(viewport: &Viewport) -> Self {
+        Self {
+            scale: viewport.scale(),
+            cx: viewport.centre[0],
+            cy: viewport.centre[1],
+            xoff: viewport.pixel_width / 2.0,
+            yoff: viewport.pixel_height / 2.0,
+        }
+    }
+
+    fn update_viewport(&mut self, viewport: &Viewport) {
+        self.scale = viewport.scale();
+        self.cx = viewport.centre[0];
+        self.cy = viewport.centre[1];
+        self.xoff = viewport.pixel_width / 2.0;
+        self.yoff = viewport.pixel_height / 2.0;
     }
 }
 
@@ -148,6 +192,7 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     num_vertices: u32,
+    viewport: Viewport,
     viewport_uniform: ViewportUniform,
     viewport_buffer: wgpu::Buffer,
     viewport_bind_group: wgpu::BindGroup,
@@ -185,7 +230,8 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let mut viewport_uniform = ViewportUniform::new(size);
+        let viewport = Viewport::new(size);
+        let viewport_uniform = ViewportUniform::new(&viewport);
         let viewport_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Viewport Buffer"),
             contents: bytemuck::cast_slice(&[viewport_uniform]),
@@ -258,11 +304,11 @@ impl State {
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             usage: wgpu::BufferUsages::VERTEX,
-            contents: bytemuck::cast_slice(VERTICES),
+            contents: bytemuck::cast_slice(SQUARE),
             label: None,
         });
 
-        let num_vertices = VERTICES.len() as u32;
+        let num_vertices = SQUARE.len() as u32;
 
         Self {
             size,
@@ -273,6 +319,7 @@ impl State {
             render_pipeline,
             vertex_buffer,
             num_vertices,
+            viewport,
             viewport_uniform,
             viewport_buffer,
             viewport_bind_group,
@@ -286,13 +333,28 @@ impl State {
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
 
-            self.viewport_uniform.update_window_size(new_size);
-            self.queue.write_buffer(
-                &self.viewport_buffer,
-                0,
-                bytemuck::cast_slice(&[self.viewport_uniform]),
-            );
+            self.viewport.update_window_size(new_size);
+            self.update_viewport();
         }
+    }
+
+    fn update_position(&mut self, delta: (f32, f32)) {
+        self.viewport.move_centre(delta);
+        self.update_viewport();
+    }
+
+    fn update_scale(&mut self, delta: f32) {
+        self.viewport.update_zoom(delta);
+        self.update_viewport();
+    }
+
+    fn update_viewport(&mut self) {
+        self.viewport_uniform.update_viewport(&self.viewport);
+        self.queue.write_buffer(
+            &self.viewport_buffer,
+            0,
+            bytemuck::cast_slice(&[self.viewport_uniform]),
+        );
     }
 
     fn render(&mut self) -> Result<(), wgpu::SurfaceError> {

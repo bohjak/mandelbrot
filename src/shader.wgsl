@@ -36,21 +36,25 @@ fn escape_time(cr: f32, ci: f32, limit: f32) -> f32 {
         }
     }
 
-    return 1.0;
+    // Correctly it should return the limit, but for the inverted look, pure black looks much better
+    return 0.0;
 }
 
 struct ViewportUniform {
-    window_size: f32,
-    abstract_size: f32,
-    offset: f32,
+    scale: f32,
+    cx: f32,
+    cy: f32,
+    xoff: f32,
+    yoff: f32,
 };
 @group(0) @binding(0)
 var<uniform> viewport: ViewportUniform;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let x = in.clip_position[0] * viewport.abstract_size / viewport.window_size - viewport.offset;
-    let y = in.clip_position[1] * viewport.abstract_size / viewport.window_size - viewport.offset;
+    let x = viewport.cx + (in.clip_position[0] - viewport.xoff) * viewport.scale;
+    let y = viewport.cy + (in.clip_position[1] - viewport.yoff) * viewport.scale;
+    // Pure black doesn't escape within the limit; the lighter the shade the more iterations it took to escape
     let e = escape_time(x, y, 255.0) / 255.0;
     return vec4<f32>(e, e, e, 1.0);
 }
