@@ -36,10 +36,18 @@ fn escape_time(cr: f32, ci: f32, limit: f32) -> f32 {
         }
     }
 
-    // Correctly it should return the limit, but for the inverted look, pure black looks much better
-    return 0.0;
+    return limit;
 }
 
+// Source: https://www.shadertoy.com/view/XljGzV
+fn hsl2rgb(hsl: vec3<f32>) -> vec3<f32> {
+    let base = hsl.x * 6.0 + vec3<f32>(0.0, 4.0, 2.0);
+    // clamp requires its arguments to be the same type
+    let rgb = clamp(abs((base % 6.0) - 3.0) - 1.0, vec3<f32>(0.0), vec3<f32>(1.0));
+    return hsl.z + hsl.y * (rgb - 0.5) * (1.0 - abs(2.0 * hsl.z - 1.0));
+}
+
+// Padded for WebGL
 struct ViewportUniform {
     scale: f32,
     cx: f32,
@@ -57,7 +65,12 @@ var<uniform> viewport: ViewportUniform;
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let x = viewport.cx + (in.clip_position[0] - viewport.xoff) * viewport.scale;
     let y = viewport.cy + (in.clip_position[1] - viewport.yoff) * viewport.scale;
-    // Pure black doesn't escape within the limit; the lighter the shade the more iterations it took to escape
-    let e = escape_time(x, y, 255.0) / 255.0;
-    return vec4<f32>(e, e, e, 1.0);
+
+    let et = escape_time(x, y, 255.0) / 255.0;
+    if et == 1.0 {
+        return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    }
+    let hsl = vec3<f32>(et, 1.0, 0.5);
+    let rgb = hsl2rgb(hsl);
+    return vec4<f32>(rgb, 1.0);
 }
