@@ -36,12 +36,19 @@ For running in the browser:
    open http://localhost:3000
    ```
 
-> **Note**
-> The server uses server-sent events to reload the page when receiving a request to /sse/reload. It's possible to automatically build the project and reload the page for development convenience.
+> **Note**  
+> The server uses server-sent events to reload the page when receiving a request to /sse/reload. It's possible to automatically build the project and reload the page for development convenience.  
 > E.g. with [entr](https://eradman.com/entrproject/): `ls src/*.rs | entr -cs 'wasm-pack build --target=web && curl http://localhost:3000/sse/reload'`
 
 ## Controls
 
-- **Pan:** hold left mouse button and drag;
-- **Zoom:** scroll - up to zoom in, down to zoom out;
-- **Quit:** escape.
+- **Mouse:** left-click and drag to move around, scroll-wheel to zoom;
+- **ArrowLeft / H:** pan left;
+- **ArrowDown / J:** pan down;
+- **ArrowUp / K:** pan up;
+- **ArrowRight / L:** pan right;
+- **Ctrl + Direction:** pan faster;
+- **Shift + Direction:** pan slower;
+- **Plus:** zoom in;
+- **Minus:** zoom out;
+- **R:** reset position and zoom level.

@@ -66,7 +66,10 @@ pub async fn run() {
         }
 
         if input.update(&event) {
-            if input.quit() || input.key_pressed(VirtualKeyCode::Escape) {
+            if input.quit()
+                || input.key_pressed(VirtualKeyCode::Escape)
+                || input.key_pressed(VirtualKeyCode::Q)
+            {
                 *control_flow = ControlFlow::Exit;
                 return;
             }
@@ -86,6 +89,37 @@ pub async fn run() {
                 if input.mouse_diff() != (0.0, 0.0) {
                     state.viewport.move_centre(input.mouse_diff());
                 }
+            }
+
+            let speed = if input.held_shift() {
+                5.0
+            } else if input.held_control() {
+                100.0
+            } else {
+                10.0
+            };
+            if input.key_held(VirtualKeyCode::H) || input.key_held(VirtualKeyCode::Left) {
+                state.viewport.move_centre((speed, 0.0));
+            }
+            if input.key_held(VirtualKeyCode::J) || input.key_held(VirtualKeyCode::Down) {
+                state.viewport.move_centre((0.0, -speed));
+            }
+            if input.key_held(VirtualKeyCode::K) || input.key_held(VirtualKeyCode::Up) {
+                state.viewport.move_centre((0.0, speed));
+            }
+            if input.key_held(VirtualKeyCode::L) || input.key_held(VirtualKeyCode::Right) {
+                state.viewport.move_centre((-speed, 0.0));
+            }
+
+            if input.key_pressed(VirtualKeyCode::Plus) {
+                state.viewport.update_zoom(0.5)
+            }
+            if input.key_pressed(VirtualKeyCode::Minus) {
+                state.viewport.update_zoom(-0.5)
+            }
+
+            if input.key_pressed(VirtualKeyCode::R) {
+                state.viewport.reset();
             }
 
             window.request_redraw();
@@ -177,6 +211,11 @@ impl Viewport {
     fn update_zoom(&mut self, delta: f32) {
         let new_zoom = self.zoom + delta;
         self.zoom = if new_zoom < 0.0 { 0.0 } else { new_zoom };
+    }
+
+    fn reset(&mut self) {
+        self.centre = [0.0, 0.0];
+        self.zoom = 0.0;
     }
 
     fn scale(&self) -> f32 {
