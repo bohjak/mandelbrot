@@ -18,6 +18,8 @@ pub async fn run() {
         if #[cfg(target_arch = "wasm32")] {
             #[cfg(feature = "console_error_panic_hook")]
             console_error_panic_hook::set_once();
+
+            #[cfg(feature = "console_log")]
             console_log::init_with_level(log::Level::Warn).expect("Couldn't initilise logger")
         } else {
             env_logger::init();
