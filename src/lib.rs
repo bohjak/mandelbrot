@@ -109,27 +109,39 @@ pub async fn run() {
             } else {
                 10.0
             };
-            if input.key_held(VirtualKeyCode::H) || input.key_held(VirtualKeyCode::Left) {
+            if input.key_held(VirtualKeyCode::H)
+                || input.key_held(VirtualKeyCode::A)
+                || input.key_held(VirtualKeyCode::Left)
+            {
                 state.viewport.move_centre((speed, 0.0));
             }
-            if input.key_held(VirtualKeyCode::J) || input.key_held(VirtualKeyCode::Down) {
+            if input.key_held(VirtualKeyCode::J)
+                || input.key_held(VirtualKeyCode::S)
+                || input.key_held(VirtualKeyCode::Down)
+            {
                 state.viewport.move_centre((0.0, -speed));
             }
-            if input.key_held(VirtualKeyCode::K) || input.key_held(VirtualKeyCode::Up) {
+            if input.key_held(VirtualKeyCode::K)
+                || input.key_held(VirtualKeyCode::W)
+                || input.key_held(VirtualKeyCode::Up)
+            {
                 state.viewport.move_centre((0.0, speed));
             }
-            if input.key_held(VirtualKeyCode::L) || input.key_held(VirtualKeyCode::Right) {
+            if input.key_held(VirtualKeyCode::L)
+                || input.key_held(VirtualKeyCode::D)
+                || input.key_held(VirtualKeyCode::Right)
+            {
                 state.viewport.move_centre((-speed, 0.0));
             }
 
-            if input.key_pressed(VirtualKeyCode::Plus) {
+            if input.key_held(VirtualKeyCode::Plus) || input.key_held(VirtualKeyCode::Equals) {
                 state.viewport.update_zoom(0.5)
             }
-            if input.key_pressed(VirtualKeyCode::Minus) {
+            if input.key_held(VirtualKeyCode::Minus) {
                 state.viewport.update_zoom(-0.5)
             }
 
-            if input.key_pressed(VirtualKeyCode::R) {
+            if input.key_pressed_os(VirtualKeyCode::R) {
                 state.viewport.reset();
             }
 
@@ -221,7 +233,13 @@ impl Viewport {
 
     fn update_zoom(&mut self, delta: f32) {
         let new_zoom = self.zoom + delta;
-        self.zoom = if new_zoom < 0.0 { 0.0 } else { new_zoom };
+        self.zoom = if new_zoom < 0.0 {
+            0.0
+        } else if new_zoom > 35.0 {
+            35.0
+        } else {
+            new_zoom
+        };
     }
 
     fn reset(&mut self) {
@@ -230,7 +248,7 @@ impl Viewport {
     }
 
     fn scale(&self) -> f32 {
-        return (1.0 / 2f32.powf(self.zoom)) * (self.point_width / self.pixel_width);
+        return (1.0 / 1.5f32.powf(self.zoom)) * (self.point_width / self.pixel_width);
     }
 }
 
