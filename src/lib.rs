@@ -18,6 +18,7 @@ pub async fn run() {
         if #[cfg(target_arch = "wasm32")] {
             #[cfg(feature = "console_error_panic_hook")]
             console_error_panic_hook::set_once();
+            console_log::init_with_level(log::Level::Warn).expect("Couldn't initilise logger")
         } else {
             env_logger::init();
         }
@@ -61,7 +62,7 @@ pub async fn run() {
                 // Quit if system is out of memory
                 Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
                 // Outdated and Timeout should resolve themselves by the next frame
-                Err(e) => eprintln!("{:?}", e),
+                Err(e) => log::error!("{:?}", e),
             }
         }
 
@@ -78,11 +79,19 @@ pub async fn run() {
                 state.resize(size);
             }
 
-            if input.scroll_diff() != 0.0 {
+            let scroll_diff = input.scroll_diff();
+            if scroll_diff != 0.0 {
                 if let Some(pos) = input.mouse() {
                     state.viewport.set_centre(pos);
                 }
-                state.viewport.update_zoom(input.scroll_diff());
+                cfg_if! {
+                        if #[cfg(target_arch = "wasm32")] {
+                                // In browser, the scroll distance is for some reason 4.5x bigger
+                state.viewport.update_zoom(scroll_diff / 4.5);
+                        } else {
+                state.viewport.update_zoom(scroll_diff);
+                        }
+                    }
             }
 
             if input.mouse_held(0) {
