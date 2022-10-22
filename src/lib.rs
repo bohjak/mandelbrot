@@ -84,7 +84,7 @@ pub async fn run() {
             let scroll_diff = input.scroll_diff();
             if scroll_diff != 0.0 {
                 if let Some(pos) = input.mouse() {
-                    state.viewport.set_centre(pos);
+                    state.viewport.set_centre(pos, scroll_diff);
                 }
                 cfg_if! {
                         if #[cfg(target_arch = "wasm32")] {
@@ -225,8 +225,8 @@ impl Viewport {
         self.centre[1] -= delta.1 * scale;
     }
 
-    fn set_centre(&mut self, pos: (f32, f32)) {
-        let scale = self.scale();
+    fn set_centre(&mut self, pos: (f32, f32), diff: f32) {
+        let scale = self.scale() * diff.clamp(0.0, 1.0);
         self.centre[0] += (pos.0 - self.pixel_width / 2.0) * scale;
         self.centre[1] += (pos.1 - self.pixel_height / 2.0) * scale;
     }
