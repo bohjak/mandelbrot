@@ -5,13 +5,13 @@ struct VertexInput {
 };
 
 struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
+    @builtin(position) pos: vec4<f32>,
 }
 
 @vertex
 fn vs_main(model: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.clip_position = vec4<f32>(model.position, 0.0, 1.0);
+    out.pos = vec4<f32>(model.position, 0.0, 1.0);
     return out;
 }
 
@@ -63,8 +63,8 @@ var<uniform> viewport: ViewportUniform;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let x = viewport.cx + (in.clip_position[0] - viewport.xoff) * viewport.scale;
-    let y = viewport.cy + (in.clip_position[1] - viewport.yoff) * viewport.scale;
+    let x = viewport.cx + (in.pos.x - viewport.xoff) * viewport.scale;
+    let y = viewport.cy + (in.pos.y - viewport.yoff) * viewport.scale;
 
     let et = escape_time(x, y, 255.0) / 255.0;
     if et == 1.0 {
