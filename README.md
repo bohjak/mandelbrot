@@ -2,6 +2,8 @@
 
 Interactive (as in one can zoom and move around) Mandelbrot set viewer. GPU-rendered with [wgpu](https://wgpu.rs).
 
+![Mandelbrot Fractal](https://repository-images.githubusercontent.com/385656011/38ce47e7-5e69-4623-ad14-e13a1b7e7a72)
+
 ## How To Run
 
 **Prerequisites:** [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) (rustc version >= 1.56.0), for WASM build [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/), and for dev server [go](https://go.dev/dl/).
@@ -43,12 +45,12 @@ For running in the browser:
 ## Controls
 
 - **Mouse:** left-click and drag to move around, scroll-wheel to zoom;
-- **ArrowLeft / H / A:** pan left;
-- **ArrowDown / J / S:** pan down;
-- **ArrowUp / K / W:** pan up;
-- **ArrowRight / L / D:** pan right;
-- **Ctrl + Direction:** pan faster;
-- **Shift + Direction:** pan slower;
-- **Plus / Equals:** zoom in;
-- **Minus:** zoom out;
-- **R:** reset position and zoom level.
+- **`ArrowLeft` / `H` / `A`:** pan left;
+- **`ArrowDown` / `J` / `S`:** pan down;
+- **`ArrowUp` / `K` / `W`:** pan up;
+- **`ArrowRight` / `L` / `D`:** pan right;
+- **`Ctrl` + Direction:** pan faster;
+- **`Shift` + Direction:** pan slower;
+- **`Plus` / `Equals`:** zoom in;
+- **`Minus`:** zoom out;
+- **`R`:** reset position and zoom level.
