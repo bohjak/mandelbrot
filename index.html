@@ -3,14 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <title>Mandelbrot</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, user-scalable=no"
+    />
   </head>
   <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
     canvas {
-      background: red;
+      background: magenta;
     }
   </style>
   <body>
-    <div id="fractal"></div>
+    <canvas id="fractal"></canvas>
 
     <script type="text/javascript">
       const sse = new EventSource("sse");
@@ -19,11 +28,6 @@
         window.location.reload();
       });
     </script>
-    <script type="module">
-      import init from "./pkg/mandelbrot.js";
-      init().then(() => {
-        console.log("WASM Loaded");
-      });
-    </script>
+    <script src="./index.js" type="module"></script>
   </body>
 </html>

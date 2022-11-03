@@ -8,19 +8,13 @@ Interactive (as in one can zoom and move around) Mandelbrot set viewer. GPU-rend
 
 **Prerequisites:** [cargo](https://doc.rust-lang.org/cargo/getting-started/installation.html) (rustc version >= 1.56.0), for WASM build [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/), and for dev server [go](https://go.dev/dl/).
 
-It's possible to run either natively or in the browser.
+~~It's possible to run either natively or in the browser.~~ It's now only possible to run in the browser.
 
 First step is to clone the repository.
 
 ```bash
 git clone https://github.com/bohjak/mandelbrot
 cd mandelbrot
-```
-
-For native build simply run release cargo build.
-
-```bash
-cargo run --release
 ```
 
 For running in the browser:
@@ -54,3 +48,6 @@ For running in the browser:
 - **`Plus` / `Equals`:** zoom in;
 - **`Minus`:** zoom out;
 - **`R`:** reset position and zoom level.
+
+> **Warning**  
+> Controls are being reworked, only mouse and `R` for reset are functional currently.

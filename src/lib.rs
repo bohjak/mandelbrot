@@ -1,153 +1,96 @@
 use bytemuck::{Pod, Zeroable};
-use cfg_if::cfg_if;
-use wgpu::util::DeviceExt;
-use winit::{dpi::PhysicalSize, window::Window};
-use winit::{
-    event::{Event, VirtualKeyCode},
-    event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
-};
-use winit_input_helper::WinitInputHelper;
-
-#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+use wgpu::util::DeviceExt;
+use winit::{
+    dpi::LogicalSize,
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
+};
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-pub async fn run() {
-    cfg_if! {
-        if #[cfg(target_arch = "wasm32")] {
-            #[cfg(feature = "console_error_panic_hook")]
-            console_error_panic_hook::set_once();
+// TODO: invert control of Viewport and State
+#[wasm_bindgen]
+pub struct WebState {
+    state: State,
+    window: Window,
+}
 
-            #[cfg(feature = "console_log")]
-            console_log::init_with_level(log::Level::Warn).expect("Couldn't initilise logger")
-        } else {
-            env_logger::init();
+#[wasm_bindgen]
+impl WebState {
+    pub async fn new(width: u32, height: u32) -> Self {
+        #[cfg(feature = "console_error_panic_hook")]
+        console_error_panic_hook::set_once();
+
+        #[cfg(feature = "console_log")]
+        console_log::init_with_level(log::Level::Warn).expect("Couldn't initilise logger");
+
+        let event_loop = EventLoop::new();
+
+        // builder is mutated inside a cfg() block
+        #[allow(unused_mut)]
+        let mut builder = WindowBuilder::new();
+
+        // because winit::platform::web is platform specific
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            let canvas = web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| doc.query_selector("canvas").ok()?)
+                .and_then(|elm| elm.dyn_into::<web_sys::HtmlCanvasElement>().ok());
+
+            use winit::platform::web::WindowBuilderExtWebSys;
+            builder = builder
+                .with_canvas(canvas)
+                .with_prevent_default(false)
+                .with_focusable(false);
         }
+
+        let window = builder
+            .with_inner_size(LogicalSize::new(width, height))
+            .build(&event_loop)
+            .expect("Couldn't build window");
+
+        let state = State::new(&window).await;
+
+        Self { state, window }
     }
 
-    let event_loop = EventLoop::new();
-    let mut input = WinitInputHelper::new();
-    let window = WindowBuilder::new()
-        .with_title("Mandelbrot")
-        .with_inner_size(PhysicalSize::new(1600, 1600))
-        .build(&event_loop)
-        .unwrap();
+    pub fn draw(&mut self) -> bool {
+        self.state.update_viewport();
+        let mut ok = true;
+        match self.state.render() {
+            Ok(_) => (),
+            // Recorfigure the surface if lost
+            Err(wgpu::SurfaceError::Lost) => {
+                self.state.resize(self.state.size.0, self.state.size.1)
+            }
+            // Quit if system is out of memory
+            Err(wgpu::SurfaceError::OutOfMemory) => ok = false,
+            // Outdated and Timeout should resolve themselves by the next frame
+            Err(e) => log::error!("{:?}", e),
+        }
 
-    #[cfg(target_arch = "wasm32")]
-    {
-        window.set_inner_size(PhysicalSize::new(800, 800));
-
-        use winit::platform::web::WindowExtWebSys;
-        web_sys::window()
-            .and_then(|win| win.document())
-            .and_then(|doc| {
-                let dst = doc.get_element_by_id("fractal")?;
-                let canvas = web_sys::Element::from(window.canvas());
-                dst.append_child(&canvas).ok()?;
-                Some(())
-            })
-            .expect("Couldn't append canvas to document body.");
+        ok
     }
 
-    let mut state = State::new(&window).await;
+    pub fn resize(&mut self, new_width: u32, new_height: u32) {
+        self.window
+            .set_inner_size(LogicalSize::new(new_width, new_height));
+        let new_size = self.window.inner_size();
+        self.state.resize(new_size.width, new_size.height);
+    }
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+    pub fn pan(&mut self, delta_x: f32, delta_y: f32) {
+        self.state.viewport.move_centre((delta_x, delta_y));
+    }
 
-        if let Event::RedrawRequested(_) = event {
-            state.update_viewport();
-            match state.render() {
-                Ok(_) => (),
-                // Recorfigure the surface if lost
-                Err(wgpu::SurfaceError::Lost) => state.resize(state.size),
-                // Quit if system is out of memory
-                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                // Outdated and Timeout should resolve themselves by the next frame
-                Err(e) => log::error!("{:?}", e),
-            }
-        }
+    pub fn zoom(&mut self, delta: f32) {
+        self.state.viewport.update_zoom(delta);
+    }
 
-        if input.update(&event) {
-            if input.quit()
-                || input.key_pressed(VirtualKeyCode::Escape)
-                || input.key_pressed(VirtualKeyCode::Q)
-            {
-                *control_flow = ControlFlow::Exit;
-                return;
-            }
-
-            if let Some(size) = input.window_resized() {
-                state.resize(size);
-            }
-
-            let scroll_diff = input.scroll_diff();
-            if scroll_diff != 0.0 {
-                if let Some(pos) = input.mouse() {
-                    state.viewport.set_centre(pos, scroll_diff);
-                }
-                cfg_if! {
-                        if #[cfg(target_arch = "wasm32")] {
-                                // In browser, the scroll distance is for some reason 4.5x bigger
-                state.viewport.update_zoom(scroll_diff / 4.5);
-                        } else {
-                state.viewport.update_zoom(scroll_diff);
-                        }
-                    }
-            }
-
-            if input.mouse_held(0) {
-                if input.mouse_diff() != (0.0, 0.0) {
-                    state.viewport.move_centre(input.mouse_diff());
-                }
-            }
-
-            let speed = if input.held_shift() {
-                5.0
-            } else if input.held_control() {
-                100.0
-            } else {
-                10.0
-            };
-            if input.key_held(VirtualKeyCode::H)
-                || input.key_held(VirtualKeyCode::A)
-                || input.key_held(VirtualKeyCode::Left)
-            {
-                state.viewport.move_centre((speed, 0.0));
-            }
-            if input.key_held(VirtualKeyCode::J)
-                || input.key_held(VirtualKeyCode::S)
-                || input.key_held(VirtualKeyCode::Down)
-            {
-                state.viewport.move_centre((0.0, -speed));
-            }
-            if input.key_held(VirtualKeyCode::K)
-                || input.key_held(VirtualKeyCode::W)
-                || input.key_held(VirtualKeyCode::Up)
-            {
-                state.viewport.move_centre((0.0, speed));
-            }
-            if input.key_held(VirtualKeyCode::L)
-                || input.key_held(VirtualKeyCode::D)
-                || input.key_held(VirtualKeyCode::Right)
-            {
-                state.viewport.move_centre((-speed, 0.0));
-            }
-
-            if input.key_held(VirtualKeyCode::Plus) || input.key_held(VirtualKeyCode::Equals) {
-                state.viewport.update_zoom(0.5)
-            }
-            if input.key_held(VirtualKeyCode::Minus) {
-                state.viewport.update_zoom(-0.5)
-            }
-
-            if input.key_pressed_os(VirtualKeyCode::R) {
-                state.viewport.reset();
-            }
-
-            window.request_redraw();
-        }
-    })
+    pub fn reset(&mut self) {
+        self.state.viewport.reset();
+    }
 }
 
 #[repr(C)]
@@ -205,18 +148,19 @@ struct Viewport {
 }
 
 impl Viewport {
-    fn new(window: PhysicalSize<u32>) -> Self {
+    fn new(width: u32, height: u32) -> Self {
         Self {
             zoom: 0.0,
-            pixel_width: window.width as f32,
-            pixel_height: window.height as f32,
+            pixel_width: width as f32,
+            pixel_height: height as f32,
             point_width: 4.0,
             centre: [0.0, 0.0],
         }
     }
 
-    fn update_window_size(&mut self, window: PhysicalSize<u32>) {
-        self.pixel_width = window.width as f32;
+    fn update_window_size(&mut self, new_width: u32, new_height: u32) {
+        self.pixel_width = new_width as f32;
+        self.pixel_height = new_height as f32;
     }
 
     fn move_centre(&mut self, delta: (f32, f32)) {
@@ -225,21 +169,9 @@ impl Viewport {
         self.centre[1] -= delta.1 * scale;
     }
 
-    fn set_centre(&mut self, pos: (f32, f32), diff: f32) {
-        let scale = self.scale() * diff.clamp(0.0, 1.0);
-        self.centre[0] += (pos.0 - self.pixel_width / 2.0) * scale;
-        self.centre[1] += (pos.1 - self.pixel_height / 2.0) * scale;
-    }
-
     fn update_zoom(&mut self, delta: f32) {
         let new_zoom = self.zoom + delta;
-        self.zoom = if new_zoom < 0.0 {
-            0.0
-        } else if new_zoom > 35.0 {
-            35.0
-        } else {
-            new_zoom
-        };
+        self.zoom = new_zoom.clamp(0.0, 35.0);
     }
 
     fn reset(&mut self) {
@@ -247,6 +179,7 @@ impl Viewport {
         self.zoom = 0.0;
     }
 
+    /// How many points is one pixel
     fn scale(&self) -> f32 {
         return (1.0 / 1.5f32.powf(self.zoom)) * (self.point_width / self.pixel_width);
     }
@@ -296,7 +229,7 @@ impl ViewportUniform {
 }
 
 struct State {
-    size: PhysicalSize<u32>,
+    size: (u32, u32),
     surface: wgpu::Surface,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -312,9 +245,10 @@ struct State {
 
 impl State {
     async fn new(window: &Window) -> Self {
-        let size = window.inner_size();
-        assert_ne!(size.width, 0);
-        assert_ne!(size.height, 0);
+        let winit_size = window.inner_size();
+        assert_ne!(winit_size.width, 0);
+        assert_ne!(winit_size.height, 0);
+        let size = (winit_size.width, winit_size.height);
 
         let instance = wgpu::Instance::new(wgpu::Backends::all());
 
@@ -348,13 +282,13 @@ impl State {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface.get_supported_formats(&adapter)[0],
-            width: size.width,
-            height: size.height,
+            width: winit_size.width,
+            height: winit_size.height,
             present_mode: wgpu::PresentMode::Fifo,
         };
         surface.configure(&device, &config);
 
-        let viewport = Viewport::new(size);
+        let viewport = Viewport::new(winit_size.width, winit_size.height);
         let viewport_uniform = ViewportUniform::new(&viewport);
         let viewport_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Viewport Buffer"),
@@ -450,13 +384,13 @@ impl State {
         }
     }
 
-    fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.size = new_size;
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
+    fn resize(&mut self, new_width: u32, new_height: u32) {
+        if new_width > 0 && new_height > 0 {
+            self.size = (new_width, new_height);
+            self.config.width = new_width;
+            self.config.height = new_height;
             self.surface.configure(&self.device, &self.config);
-            self.viewport.update_window_size(new_size);
+            self.viewport.update_window_size(new_width, new_height);
         }
     }
 
