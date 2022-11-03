@@ -7,6 +7,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, user-scalable=no"
     />
+    <link rel="icon" href="media/favicon.ico" type="image/x-icon" />
   </head>
   <style>
     body {
@@ -15,7 +16,10 @@
       overflow: hidden;
     }
     canvas {
-      background: magenta;
+      background: center / contain no-repeat url("./media/prerendered.png")
+        #ff2a00;
+      width: 100vw;
+      height: 100vh;
     }
   </style>
   <body>
@@ -28,6 +32,7 @@
         window.location.reload();
       });
     </script>
+
     <script src="./index.js" type="module"></script>
   </body>
 </html>
